@@ -95,15 +95,41 @@ $('bankCat').onchange=renderBank;$('bankDiff').onchange=renderBank;
 let speakOn=false;try{speakOn=localStorage.getItem('k3p1_tts')==='1'}catch(e){}
 const TS=window.speechSynthesis;
 function say(t){let u=new SpeechSynthesisUtterance(t);let th=/[\u0E00-\u0E7F]/.test(t);u.lang=th?'th-TH':'en-US';u.rate=.85;let v=TS.getVoices().find(v=>v.lang&&v.lang.toLowerCase().replace('_','-').startsWith(th?'th':'en'));if(v)u.voice=v;TS.speak(u)}
-function speak(){if(!TS)return;TS.cancel();let q=state.list[state.i];if(!q)return;say(q.question);q.choices.forEach((c,i)=>say(letters[i]+'. '+c))}
+function sysSpeak(q){if(!TS)return;TS.cancel();say(q.question);q.choices.forEach((c,i)=>say(letters[i]+'. '+c))}
 function paintTts(){$('tts').textContent='🔊 อ่านออกเสียง: '+(speakOn?'เปิด':'ปิด');$('tts').classList.toggle('on',speakOn);$('tts').setAttribute('aria-pressed',speakOn);$('ttsRe').classList.toggle('hidden',!speakOn)}
-$('tts').onclick=()=>{speakOn=!speakOn;try{localStorage.setItem('k3p1_tts',speakOn?'1':'0')}catch(e){}paintTts();if(speakOn)speak();else if(TS)TS.cancel()};
+$('tts').onclick=()=>{speakOn=!speakOn;try{localStorage.setItem('k3p1_tts',speakOn?'1':'0')}catch(e){}paintTts();if(speakOn)speak();else stopAll()};
 $('ttsRe').onclick=speak;
 if(!TS){$('tts').classList.add('hidden')}
 const _render=render,_answer=answer,_finish=finish;
 render=function(){_render();if(speakOn)speak()};
-answer=function(i){if(TS)TS.cancel();_answer(i)};
-finish=function(){if(TS)TS.cancel();_finish()};
+answer=function(i){stopAll();_answer(i)};
+finish=function(){stopAll();_finish()};
+const ls=k=>{try{return localStorage.getItem(k)}catch(e){return null}},ss=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+let eng=ls('k3_eng')||'sys';if(eng==='gem')eng='gm';let gkey=ls('k3_key')||'';let vm=ls('k3_vm')||'Achird',vf=ls('k3_vf')||'Sulafat',mood=ls('k3_mood')||'friendly',token=0;const MOODS={friendly:['เป็นกันเอง','clear, friendly, slightly slow, for young children'],cheer:['สดใสสนุกสนาน','cheerful, upbeat and playful, for young children'],calm:['ใจเย็น ช้า ๆ','calm, gentle and slow, very clear articulation'],excited:['ตื่นเต้น','excited and enthusiastic, energetic'],serious:['จริงจัง ชัดเจน','clear, neutral and professional, like a teacher']};const cache=new Map(),player=new Audio();
+const EP='https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash-tts:generateContent';
+document.addEventListener('pointerdown',function u(){player.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';player.play().catch(()=>{});document.removeEventListener('pointerdown',u)},{once:true});
+async function rf(u,o){let r=await fetch(u,o);if(r.status===429){await new Promise(z=>setTimeout(z,3000));r=await fetch(u,o)}return r}
+function stopAll(){token++;if(TS)TS.cancel();player.pause()}
+function setSt(t){$('vst').textContent=t}
+async function gSpeak(text,tk){const vo=eng==='gf'?vf:vm,st=MOODS[mood][1],k=vo+'|'+st+'|'+text;let url=cache.get(k);if(!url){const r=await rf(EP,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':gkey},body:JSON.stringify({contents:[{role:'user',parts:[{text,speech_metadata:{style:st}}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{voice:vo}}}})});if(!r.ok){let m='';try{m=(await r.json()).error.message}catch(e){}throw new Error('HTTP '+r.status+(m?': '+m.slice(0,140):''))}const j=await r.json();const bin=atob(j.candidates[0].content.parts[0].inlineData.data),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);url=URL.createObjectURL(new Blob([u],{type:'audio/wav'}));cache.set(k,url)}if(tk!==token)return;player.src=url;await player.play()}
+function speak(){stopAll();const tk=token,q=state.list[state.i];if(!q)return;if(eng!=='sys'&&!gkey){setSt('กรุณากรอก API Key ในเมนู ⚙ เสียง ก่อน (ใช้เสียงระบบแทน)');sysSpeak(q)}else if(eng!=='sys'){setSt('กำลังเตรียมเสียง Gemini…');gSpeak(q.question+' <short pause> '+q.choices.map((c,i)=>letters[i]+'. '+c).join(' <short pause> '),tk).then(()=>setSt('')).catch(e=>{setSt('Gemini ใช้ไม่ได้ ('+e.message+') ใช้เสียงระบบแทน');sysSpeak(q)})}else{setSt('');sysSpeak(q)}}
+$('ttsRe').onclick=speak;
+const VM=[['Achird','เป็นกันเอง'],['Puck','สดใส'],['Charon','ชัดเจน'],['Iapetus','ชัดเจน'],['Orus','หนักแน่น'],['Sadaltager','รอบรู้'],['Fenrir','ตื่นเต้น']];
+const VF=[['Sulafat','อบอุ่น'],['Leda','วัยใส'],['Zephyr','สดใส'],['Aoede','ลื่นไหล'],['Kore','หนักแน่น'],['Vindemiatrix','นุ่มนวล']];
+const ENG=[['sys','🔈 เสียงจากระบบ'],['gm','🎙️ Gemini 3.8 Flash TTS (เสียงผู้ชาย)'],['gf','🎙️ Gemini 3.8 Flash TTS (เสียงผู้หญิง)']];
+const stl=document.createElement('style');stl.textContent='.vb{min-height:48px;padding:10px 16px;border-radius:14px;border:2px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;font-size:17px;font-weight:600;cursor:pointer}.vb.on{background:linear-gradient(135deg,#ffd94f,#ffab3f);color:#15213b;border-color:#ffd94f}.vl{font-weight:700;color:#ffd94f;font-size:16px;margin:12px 0 6px}.vrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}';document.head.appendChild(stl);
+const pn=document.createElement('div');pn.style.cssText='display:none;margin:10px 0;padding:16px;border-radius:16px;background:#14224a;border:2px solid #ffd94f;color:#fff';
+pn.innerHTML='<div style="font-size:19px;font-weight:800">⚙ ตั้งค่าเสียงอ่านข้อสอบ</div><div class="vl">เลือกเสียง</div><div class="vrow" id="veng"></div><div id="vkw"><div class="vl">API Key ของ Gemini</div><div class="vrow"><input id="vkey" type="password" placeholder="วาง API Key ที่นี่" autocomplete="off" style="flex:1;min-width:220px;min-height:48px;padding:10px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;font-size:17px"><button id="vksave" class="vb">💾 บันทึก</button><button id="vkshow" class="vb">👁 แสดง/ซ่อน</button></div></div><div id="vvw"><div class="vl">ชื่อเสียง</div><div class="vrow" id="vvoice"></div></div><div id="vmw"><div class="vl">อารมณ์และน้ำเสียง</div><div class="vrow" id="vmood"></div></div><div class="vrow" style="margin-top:14px"><button id="vtest" class="vb">▶ ทดสอบเสียง</button><span id="vst" style="font-size:15px"></span></div>';
+const mt=$('dtag').parentElement;mt.parentElement.insertBefore(pn,mt.nextSibling);
+const gb=document.createElement('button');gb.className='ghost';gb.textContent='⚙ เสียง';gb.onclick=()=>{pn.style.display=pn.style.display==='none'?'block':'none'};$('tts').parentElement.insertBefore(gb,$('ttsRe'));
+function chips(id,list,cur,fn){const e=$(id);e.innerHTML='';list.forEach(x=>{const b=document.createElement('button');b.className='vb'+(x[0]===cur?' on':'');b.textContent=x[1];b.onclick=()=>{fn(x[0]);drawP()};e.appendChild(b)})}
+function drawP(){chips('veng',ENG,eng,v=>{eng=v;ss('k3_eng',v)});$('vvw').style.display=$('vmw').style.display=$('vkw').style.display=eng==='sys'?'none':'block';
+chips('vvoice',(eng==='gf'?VF:VM).map(v=>[v[0],v[0]+' – '+v[1]]),eng==='gf'?vf:vm,v=>{if(eng==='gf'){vf=v;ss('k3_vf',v)}else{vm=v;ss('k3_vm',v)}});
+chips('vmood',Object.entries(MOODS).map(([k,v])=>[k,v[0]]),mood,v=>{mood=v;ss('k3_mood',v)})}
+drawP();
+$('vkey').value=gkey;$('vksave').onclick=()=>{gkey=$('vkey').value.trim();ss('k3_key',gkey);setSt(gkey?'บันทึก API Key แล้ว':'ลบ API Key แล้ว')};$('vkshow').onclick=()=>{$('vkey').type=$('vkey').type==='password'?'text':'password'};
+$('vtest').onclick=()=>{stopAll();const tk=token;if(eng==='sys'){setSt('');say('สวัสดีครับ วันนี้เรามาฝึกทำข้อสอบด้วยกันนะครับ');return}gkey=$('vkey').value.trim();ss('k3_key',gkey);if(!gkey){setSt('กรุณากรอก API Key ก่อน');return}setSt('กำลังเตรียมเสียง…');gSpeak('สวัสดีครับ วันนี้เรามาฝึกทำข้อสอบด้วยกันนะครับ',tk).then(()=>setSt('')).catch(e=>setSt('ใช้ไม่ได้ ('+e.message+')'))};
+
 paintTts();
 fillCats('cat');fillCats('bankCat');updateBest();startQuiz();
 </script>
