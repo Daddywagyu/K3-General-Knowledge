@@ -76,17 +76,22 @@ const letters=['1','2','3','4'];
 const cats=[...new Set(BANK.map(x=>x.category))];
 let state={list:[],i:0,score:0,answered:false};
 const $=id=>document.getElementById(id);
+let W={},reviewOnly=false;try{W=JSON.parse(localStorage.getItem('k3p1_wrong')||'{}')}catch(e){}
+const kq=x=>x.question+'|'+x.choices[x.answer];
+function saveW(){try{localStorage.setItem('k3p1_wrong',JSON.stringify(W))}catch(e){}paintWrong()}
+function rec(q,ok){const k=kq(q);if(!ok){const e=W[k]||{w:0,s:0};e.w++;e.s=0;W[k]=e}else if(W[k]){W[k].s++;if(W[k].s>=2)delete W[k]}saveW()}
+function wshuffle(a){return a.map(x=>{const e=W[kq(x)],w=e?(e.s>=1?3:1+4*Math.min(e.w,3)):1;return[x,Math.pow(Math.random(),1/w)]}).sort((p,q)=>q[1]-p[1]).map(p=>p[0])}
 function fillCats(selId){const s=$(selId);s.innerHTML='<option value="all">ทุกหมวด (582 ข้อ)</option>'+cats.map(c=>`<option>${c}</option>`).join('')}
 function getList(cat,diff){return BANK.filter(x=>(cat==='all'||x.category===cat)&&(diff==='all'||x.difficulty===diff))}
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-function startQuiz(){let src=shuffle(getList($('cat').value,$('diff').value));let n=$('amount').value==='all'?src.length:Number($('amount').value);if(!src.length) return;state={list:src.slice(0,n),i:0,score:0,answered:false};$('card').classList.remove('hidden');$('finish').classList.add('hidden');render()}
+function startQuiz(){let base=getList($('cat').value,$('diff').value);if(reviewOnly)base=base.filter(x=>W[kq(x)]);reviewOnly=false;let src=wshuffle(base);let n=$('amount').value==='all'?src.length:Number($('amount').value);if(!src.length) return;state={list:src.slice(0,n),i:0,score:0,answered:false};$('card').classList.remove('hidden');$('finish').classList.add('hidden');render()}
 function render(){let q=state.list[state.i];state.answered=false;$('qno').textContent=`ข้อ ${state.i+1} / ${state.list.length}`;$('ctag').textContent=q.category;$('dtag').textContent=q.difficulty;$('dtag').className='tag '+q.difficulty.toLowerCase();$('qtext').textContent=q.question;$('answers').innerHTML='';$('feedback').className='feedback';$('feedback').innerHTML='';$('next').classList.add('hidden');$('skip').classList.remove('hidden');$('bar').style.width=`${state.i/state.list.length*100}%`;q.choices.forEach((c,i)=>{let b=document.createElement('button');b.className='answer';b.innerHTML=`<span class="letter">${letters[i]}</span><span>${c}</span>`;b.onclick=()=>answer(i);$('answers').appendChild(b)})}
 function answer(i){if(state.answered)return;state.answered=true;let q=state.list[state.i],bs=[...$('answers').children];bs.forEach((b,j)=>{b.disabled=true;if(j===q.answer)b.classList.add('correct')});if(i===q.answer){state.score++;$('feedback').className='feedback show good';$('feedback').innerHTML=`✅ <b>ถูกต้อง!</b> ${q.explanation}`}else{bs[i].classList.add('wrong');$('feedback').className='feedback show bad';$('feedback').innerHTML=`💡 <b>ยังไม่ใช่</b> — คำตอบคือ <b>${q.choices[q.answer]}</b>`}$('next').classList.remove('hidden');$('skip').classList.add('hidden');$('bar').style.width=`${(state.i+1)/state.list.length*100}%`}
 function next(){if(state.i<state.list.length-1){state.i++;render()}else finish()}
 function skip(){state.i++;if(state.i>=state.list.length)finish();else render()}
 function finish(){let pct=Math.round(state.score/state.list.length*100);$('card').classList.add('hidden');$('finish').classList.remove('hidden');$('score').textContent=pct+'%';$('summary').innerHTML=`ได้ <b>${state.score}</b> / ${state.list.length} ข้อ — ${pct>=80?'ยอดเยี่ยม! 🥇':pct>=60?'เก่งมาก! 🥈':'ลองใหม่อีกครั้งนะ 💪'}`;let best=Number(localStorage.getItem('k3p1_best')||0);if(pct>best)localStorage.setItem('k3p1_best',pct);updateBest()}
 function updateBest(){$('best').textContent=(localStorage.getItem('k3p1_best')||0)+'%'}
-function renderBank(){let list=getList($('bankCat').value,$('bankDiff').value);$('count').textContent=`(${list.length} ข้อ)`;$('bankgrid').innerHTML='';list.forEach((q,i)=>{let d=document.createElement('div');d.className='item';d.innerHTML=`<div class="small">${q.category} • ${q.difficulty}</div><b>${i+1}. ${q.question}</b><div class="small">A. ${q.choices[0]}<br>B. ${q.choices[1]}<br>C. ${q.choices[2]}<br>D. ${q.choices[3]}</div><div class="key">เฉลย: ${letters[q.answer]}. ${q.choices[q.answer]}</div>`;$('bankgrid').appendChild(d)})}
+function renderBank(){let list=getList($('bankCat').value,$('bankDiff').value);$('count').textContent=`(${list.length} ข้อ)`;$('bankgrid').innerHTML='';list.forEach((q,i)=>{let d=document.createElement('div');d.className='item';d.innerHTML=`<div class="small">${q.category} • ${q.difficulty}</div><b>${i+1}. ${q.question}</b><div class="small">1. ${q.choices[0]}<br>2. ${q.choices[1]}<br>3. ${q.choices[2]}<br>4. ${q.choices[3]}</div><div class="key">เฉลย: ${letters[q.answer]}. ${q.choices[q.answer]}</div>`;$('bankgrid').appendChild(d)})}
 $('start').onclick=startQuiz;$('again').onclick=startQuiz;$('next').onclick=next;$('skip').onclick=skip;$('clearBest').onclick=()=>{localStorage.removeItem('k3p1_best');updateBest()};$('print').onclick=()=>window.print();
 $('tabQuiz').onclick=()=>{ $('tabQuiz').classList.add('on');$('tabBank').classList.remove('on');$('quizView').classList.remove('hidden');$('bankView').classList.add('hidden')};
 $('tabBank').onclick=()=>{ $('tabBank').classList.add('on');$('tabQuiz').classList.remove('on');$('quizView').classList.add('hidden');$('bankView').classList.remove('hidden');renderBank()};
@@ -102,8 +107,8 @@ $('ttsRe').onclick=speak;
 if(!TS){$('tts').classList.add('hidden')}
 const _render=render,_answer=answer,_finish=finish;
 render=function(){_render();if(speakOn)speak()};
-answer=function(i){stopAll();_answer(i)};
-finish=function(){stopAll();_finish()};
+answer=function(i){stopAll();if(!state.answered){const q=state.list[state.i];rec(q,i===q.answer)}_answer(i)};
+finish=function(){stopAll();_finish();const n=Object.keys(W).length;if(n)$('summary').innerHTML+='<br>📌 มี <b>'+n+'</b> ข้อที่ต้องทบทวน — ระบบจะสุ่มมาให้ทำซ้ำบ่อยขึ้น'};
 const ls=k=>{try{return localStorage.getItem(k)}catch(e){return null}},ss=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 let eng=ls('k3_eng')||'sys';if(eng==='gem')eng='gm';if(eng==='az')eng='sys';let gkey=ls('k3_key')||'',elkey=ls('k3_elkey')||'',elvid=ls('k3_elv')||'21m00Tcm4TlvDq8ikWAM',elmodel=ls('k3_elm')||'eleven_v3',elvoices=[['21m00Tcm4TlvDq8ikWAM','Rachel (หญิง)'],['pNInz6obpgDQGcFmaJgB','Adam (ชาย)']];let vm=ls('k3_vm')||'Achird',vf=ls('k3_vf')||'Sulafat',mood=ls('k3_mood')||'friendly',token=0;const MOODS={friendly:['เป็นกันเอง','clear, friendly, slightly slow, for young children'],cheer:['สดใสสนุกสนาน','cheerful, upbeat and playful, for young children'],calm:['ใจเย็น ช้า ๆ','calm, gentle and slow, very clear articulation'],excited:['ตื่นเต้น','excited and enthusiastic, energetic'],serious:['จริงจัง ชัดเจน','clear, neutral and professional, like a teacher']};const cache=new Map(),player=new Audio();
 const EP='https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash-tts:generateContent';
@@ -136,6 +141,13 @@ $('elload').onclick=async()=>{elkey=$('elkey').value.trim();ss('k3_elkey',elkey)
 $('vkey').value=gkey;$('vksave').onclick=()=>{gkey=$('vkey').value.trim();ss('k3_key',gkey);setSt(gkey?'บันทึก API Key แล้ว':'ลบ API Key แล้ว')};$('vkshow').onclick=()=>{$('vkey').type=$('vkey').type==='password'?'text':'password'};
 $('vtest').onclick=()=>{stopAll();const tk=token,T='สวัสดีครับ วันนี้เรามาฝึกทำข้อสอบด้วยกันนะครับ';if(eng==='sys'){setSt('');say(T);return}if(eng==='el'){elkey=$('elkey').value.trim();elvid=$('elvid').value.trim()||elvid;ss('k3_elkey',elkey);ss('k3_elv',elvid);if(!elkey||!elkey.startsWith('sk_')){setSt(elkey?'Key ต้องขึ้นต้นด้วย sk_ (ไม่ใช่ Key ID) — สร้าง Key ใหม่แล้วคัดลอกทันที':'กรุณากรอก ElevenLabs Key ก่อน');return}setSt('กำลังเตรียมเสียง…');eSpeak(T,tk).then(()=>setSt('')).catch(e=>setSt('ใช้ไม่ได้ ('+e.message+')'));return}gkey=$('vkey').value.trim();ss('k3_key',gkey);if(!gkey){setSt('กรุณากรอก API Key ก่อน');return}setSt('กำลังเตรียมเสียง…');gSpeak(T,tk).then(()=>setSt('')).catch(e=>setSt('ใช้ไม่ได้ ('+e.message+')'))};
 
+const rb=document.createElement('button');rb.className=$('start').className;rb.id='reviewBtn';
+const cw=document.createElement('button');cw.className='ghost';cw.id='clearWrong';cw.textContent='ล้างข้อที่ผิด';
+$('start').after(rb);rb.after(cw);
+function paintWrong(){const n=Object.keys(W).length;rb.textContent='🔁 ทบทวนข้อที่ผิด ('+n+')';rb.disabled=!n;rb.style.opacity=n?1:.5;cw.style.display=n?'':'none'}
+rb.onclick=()=>{if(!Object.keys(W).length)return;reviewOnly=true;if(!getList($('cat').value,$('diff').value).some(x=>W[kq(x)])){reviewOnly=false;alert('ในหมวดและระดับที่เลือก ไม่มีข้อที่ผิด ลองเลือก "ทุกหมวด" ดูนะ');return}startQuiz()};
+cw.onclick=()=>{if(confirm('ล้างรายการข้อที่ทำผิดทั้งหมด?')){W={};saveW()}};
+paintWrong();
 paintTts();
 fillCats('cat');fillCats('bankCat');updateBest();startQuiz();
 </script>
